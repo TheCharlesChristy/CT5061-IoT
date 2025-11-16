@@ -1,39 +1,36 @@
-// SHT45 Sensor Demo - ESP32S3 with SSD1306 OLED Display
-// Demonstrates SHT45HumidityTempSensor with real-time display and plotting
-//
-// Hardware:
-//   - ESP32S3 (Seeed XIAO ESP32S3)
-//   - SSD1306 OLED Display 128x64 (I2C, address 0x3C)
-//   - Adafruit SHT45 Temperature & Humidity Sensor (I2C, address 0x44)
-//
-// Features:
-//   - Real-time temperature and humidity display
-//   - Live plotting of sensor data over time
-//   - Serial command interface
-//   - 1-second polling interval
+/**
+ * @file SHT45_Example.cpp
+ * @brief Example demonstrating the use of SHT45HumidityTempSensor class
+ * 
+ * This example shows how to:
+ * - Initialize the SHT45 sensor
+ * - Read temperature and humidity
+ * - Display data on SSD1306 OLED screen
+ * - Plot temperature and humidity over time
+ * - Handle serial commands from host
+ * - Integrate with DeviceRegistry
+ */
 
 #include <Arduino.h>
-#include <Wire.h>
 #include "SHT45HumidityTempSensor.hpp"
 #include "DeviceRegistry.hpp"
 #include "LedScreen128_64.hpp"
 #include "DataPlot.hpp"
+#include "TextBox.hpp"
 
-// Pin definitions for ESP32S3
-#define I2C_SDA 5  // Default SDA for Seeed XIAO ESP32S3
-#define I2C_SCL 6  // Default SCL for Seeed XIAO ESP32S3
-
-// Pin definitions for ESP32S3
-#define I2C_SDA 5  // Default SDA for Seeed XIAO ESP32S3
-#define I2C_SCL 6  // Default SCL for Seeed XIAO ESP32S3
-
-// Create sensor and display instances
+// Create sensor instance (uses default I2C address 0x44)
 SHT45HumidityTempSensor* tempSensor;
+
+// Create display instance
 LedScreen128_64* display;
 
 // Create data plots
 DataPlot* tempPlot;
 DataPlot* humidityPlot;
+
+// Create text boxes for current readings
+TextBox* tempTextBox;
+TextBox* humTextBox;
 
 // Reading interval
 const unsigned long READ_INTERVAL = 1000;  // 1 second
@@ -46,19 +43,17 @@ float humData[MAX_DATA_POINTS];
 int dataIndex = 0;
 int dataCount = 0;
 
-// Function declarations
+// Function declaration
 void handleCommand(String command);
 
 void setup() {
     Serial.begin(115200);
     delay(100);
     
-    Serial.println("\n========================================");
-    Serial.println("  SHT45 Sensor Demo with Live Display");
-    Serial.println("========================================\n");
+    Serial.println("\n=== SHT45 Humidity & Temperature Sensor with Display ===\n");
     
-    // Initialize I2C with custom pins
-    Wire.begin(I2C_SDA, I2C_SCL);
+    // Initialize I2C
+    Wire.begin(5, 6);  // SDA=5, SCL=6 for Seeed XIAO ESP32S3
     delay(100);
     
     // Create and initialize display
@@ -111,7 +106,11 @@ void setup() {
         Serial.println("Display registered with DeviceRegistry");
     }
     
-    // Create data plots
+    // Create text boxes for current readings (top area)
+    tempTextBox = new TextBox(0, 0, 64, 16, "Temp: --.-C");
+    humTextBox = new TextBox(64, 0, 64, 16, "Hum: --.-%");
+    
+    // Create data plots (bottom area)
     // Temperature plot on left side
     tempPlot = new DataPlot(0, 18, 64, 46, MAX_DATA_POINTS);
     tempPlot->setAutoScale(true);
@@ -149,7 +148,6 @@ void setup() {
     Serial.println("  RESET - Soft reset the sensor");
     Serial.println("  CELSIUS - Display temperature in Celsius");
     Serial.println("  FAHRENHEIT - Display temperature in Fahrenheit");
-    Serial.println("  HELP - Display available commands");
     Serial.println();
 }
 
@@ -180,23 +178,31 @@ void loop() {
                 humidityPlot->addPoint((float)i, humData[idx]);
             }
             
+            // Update text boxes with current readings
+            char tempStr[20];
+            char humStr[20];
+            snprintf(tempStr, sizeof(tempStr), "%.1fC", tempC);
+            snprintf(humStr, sizeof(humStr), "%.1f%%", humidity);
+            
+            tempTextBox->setText(tempStr);
+            humTextBox->setText(humStr);
+            
             // Update display
             display->clearDisplay();
             
-            // Draw labels and current values
+            // Draw labels
             display->setTextSize(1);
             display->setTextColor(true);
             display->setCursor(2, 1);
             display->print("T:");
-            display->setCursor(14, 1);
-            display->print(tempC, 1);
-            display->print("C");
-            
             display->setCursor(68, 1);
             display->print("H:");
+            
+            // Draw current values
+            display->setCursor(14, 1);
+            display->print(tempStr);
             display->setCursor(80, 1);
-            display->print(humidity, 1);
-            display->print("%");
+            display->print(humStr);
             
             // Draw separator line
             display->drawFastHLine(0, 16, 128, true);

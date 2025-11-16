@@ -10,6 +10,8 @@
             "includePath": [
                 "/home/charles/Desktop/Projects/CT5061-IoT/include",
                 "/home/charles/Desktop/Projects/CT5061-IoT/src",
+                "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit SHT4x Library",
+                "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit Unified Sensor",
                 "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit SSD1306",
                 "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit GFX Library",
                 "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit BusIO",
@@ -214,6 +216,7 @@
                 "/home/charles/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/qio_opi/include",
                 "/home/charles/.platformio/packages/framework-arduinoespressif32/cores/esp32",
                 "/home/charles/.platformio/packages/framework-arduinoespressif32/variants/XIAO_ESP32S3",
+                "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit SH110X",
                 "/home/charles/.platformio/packages/framework-arduinoespressif32/libraries/ArduinoOTA/src",
                 "/home/charles/.platformio/packages/framework-arduinoespressif32/libraries/AsyncUDP/src",
                 "/home/charles/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
@@ -252,6 +255,8 @@
                 "path": [
                     "/home/charles/Desktop/Projects/CT5061-IoT/include",
                     "/home/charles/Desktop/Projects/CT5061-IoT/src",
+                    "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit SHT4x Library",
+                    "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit Unified Sensor",
                     "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit SSD1306",
                     "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit GFX Library",
                     "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit BusIO",
@@ -456,6 +461,7 @@
                     "/home/charles/.platformio/packages/framework-arduinoespressif32/tools/sdk/esp32s3/qio_opi/include",
                     "/home/charles/.platformio/packages/framework-arduinoespressif32/cores/esp32",
                     "/home/charles/.platformio/packages/framework-arduinoespressif32/variants/XIAO_ESP32S3",
+                    "/home/charles/Desktop/Projects/CT5061-IoT/.pio/libdeps/seeed_xiao_esp32s3/Adafruit SH110X",
                     "/home/charles/.platformio/packages/framework-arduinoespressif32/libraries/ArduinoOTA/src",
                     "/home/charles/.platformio/packages/framework-arduinoespressif32/libraries/AsyncUDP/src",
                     "/home/charles/.platformio/packages/framework-arduinoespressif32/libraries/BLE/src",
