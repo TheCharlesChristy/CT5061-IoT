@@ -1,0 +1,325 @@
+/**
+ * @file SHT45_Example.cpp
+ * @brief Example demonstrating the use of SHT45HumidityTempSensor class
+ * 
+ * This example shows how to:
+ * - Initialize the SHT45 sensor
+ * - Read temperature and humidity
+ * - Display data on SSD1306 OLED screen
+ * - Plot temperature and humidity over time
+ * - Handle serial commands from host
+ * - Integrate with DeviceRegistry
+ */
+
+#include <Arduino.h>
+#include "SHT45HumidityTempSensor.hpp"
+#include "DeviceRegistry.hpp"
+#include "LedScreen128_64.hpp"
+#include "DataPlot.hpp"
+#include "TextBox.hpp"
+
+// Create sensor instance (uses default I2C address 0x44)
+SHT45HumidityTempSensor* tempSensor;
+
+// Create display instance
+LedScreen128_64* display;
+
+// Create data plots
+DataPlot* tempPlot;
+DataPlot* humidityPlot;
+
+// Create text boxes for current readings
+TextBox* tempTextBox;
+TextBox* humTextBox;
+
+// Reading interval
+const unsigned long READ_INTERVAL = 1000;  // 1 second
+unsigned long lastReadTime = 0;
+
+// Data buffers for plotting
+#define MAX_DATA_POINTS 50
+float tempData[MAX_DATA_POINTS];
+float humData[MAX_DATA_POINTS];
+int dataIndex = 0;
+int dataCount = 0;
+
+// Function declaration
+void handleCommand(String command);
+
+void setup() {
+    Serial.begin(115200);
+    delay(100);
+    
+    Serial.println("\n=== SHT45 Humidity & Temperature Sensor with Display ===\n");
+    
+    // Initialize I2C
+    Wire.begin(5, 6);  // SDA=5, SCL=6 for Seeed XIAO ESP32S3
+    delay(100);
+    
+    // Create and initialize display
+    display = new LedScreen128_64(0x3C);
+    Serial.print("Initializing display... ");
+    if (!display->begin()) {
+        Serial.println("FAILED!");
+        Serial.println("Check display connections and restart.");
+        while (1) delay(10);
+    }
+    Serial.println("SUCCESS!");
+    
+    // Create sensor instance
+    tempSensor = new SHT45HumidityTempSensor();
+    
+    // Initialize sensor
+    Serial.print("Initializing SHT45 sensor... ");
+    if (!tempSensor->begin()) {
+        Serial.println("FAILED!");
+        Serial.println("Check sensor connections and restart.");
+        
+        // Display error on screen
+        display->clearDisplay();
+        display->setTextSize(1);
+        display->setTextColor(true);
+        display->setCursor(0, 0);
+        display->println("SHT45 Init FAILED!");
+        display->println("Check connections");
+        display->displayBuffer();
+        
+        while (1) delay(10);
+    }
+    Serial.println("SUCCESS!");
+    
+    // Set high precision mode for best accuracy
+    tempSensor->setPrecision(SHT4X_HIGH_PRECISION);
+    Serial.println("Precision mode: HIGH");
+    
+    // Read and display sensor serial number
+    uint32_t serial = tempSensor->getSerialNumber();
+    Serial.print("Sensor Serial Number: 0x");
+    Serial.println(serial, HEX);
+    
+    // Register with DeviceRegistry
+    DeviceRegistry& registry = DeviceRegistry::getInstance();
+    if (registry.registerDevice(tempSensor)) {
+        Serial.println("Sensor registered with DeviceRegistry");
+    }
+    if (registry.registerDevice(display)) {
+        Serial.println("Display registered with DeviceRegistry");
+    }
+    
+    // Create text boxes for current readings (top area)
+    tempTextBox = new TextBox(0, 0, 64, 16, "Temp: --.-C");
+    humTextBox = new TextBox(64, 0, 64, 16, "Hum: --.-%");
+    
+    // Create data plots (bottom area)
+    // Temperature plot on left side
+    tempPlot = new DataPlot(0, 18, 64, 46, MAX_DATA_POINTS);
+    tempPlot->setAutoScale(true);
+    tempPlot->setShowAxes(true);
+    tempPlot->setPlotStyle(PlotStyle::LINES);
+    
+    // Humidity plot on right side
+    humidityPlot = new DataPlot(64, 18, 64, 46, MAX_DATA_POINTS);
+    humidityPlot->setYRange(0, 100);  // Fixed scale for humidity
+    humidityPlot->setAutoScale(false);
+    humidityPlot->setShowAxes(true);
+    humidityPlot->setPlotStyle(PlotStyle::LINES);
+    
+    // Initialize data arrays
+    for (int i = 0; i < MAX_DATA_POINTS; i++) {
+        tempData[i] = 0.0f;
+        humData[i] = 0.0f;
+    }
+    
+    // Display welcome message
+    display->clearDisplay();
+    display->setTextSize(1);
+    display->setTextColor(true);
+    display->setCursor(10, 10);
+    display->println("SHT45 Sensor");
+    display->setCursor(5, 25);
+    display->println("Initializing...");
+    display->displayBuffer();
+    delay(1000);
+    
+    Serial.println("\nReading sensor data every second...");
+    Serial.println("Available commands:");
+    Serial.println("  READ - Read current temperature and humidity");
+    Serial.println("  SERIAL - Display sensor serial number");
+    Serial.println("  RESET - Soft reset the sensor");
+    Serial.println("  CELSIUS - Display temperature in Celsius");
+    Serial.println("  FAHRENHEIT - Display temperature in Fahrenheit");
+    Serial.println();
+}
+
+void loop() {
+    // Periodic sensor reading (every 1 second)
+    if (millis() - lastReadTime >= READ_INTERVAL) {
+        lastReadTime = millis();
+        
+        if (tempSensor->readSensor()) {
+            float tempC = tempSensor->getTemperature();
+            float humidity = tempSensor->getHumidity();
+            
+            // Store data in circular buffer
+            tempData[dataIndex] = tempC;
+            humData[dataIndex] = humidity;
+            dataIndex = (dataIndex + 1) % MAX_DATA_POINTS;
+            if (dataCount < MAX_DATA_POINTS) {
+                dataCount++;
+            }
+            
+            // Update plots with all data points
+            tempPlot->clearData();
+            humidityPlot->clearData();
+            
+            for (int i = 0; i < dataCount; i++) {
+                int idx = (dataIndex - dataCount + i + MAX_DATA_POINTS) % MAX_DATA_POINTS;
+                tempPlot->addPoint((float)i, tempData[idx]);
+                humidityPlot->addPoint((float)i, humData[idx]);
+            }
+            
+            // Update text boxes with current readings
+            char tempStr[20];
+            char humStr[20];
+            snprintf(tempStr, sizeof(tempStr), "%.1fC", tempC);
+            snprintf(humStr, sizeof(humStr), "%.1f%%", humidity);
+            
+            tempTextBox->setText(tempStr);
+            humTextBox->setText(humStr);
+            
+            // Update display
+            display->clearDisplay();
+            
+            // Draw labels
+            display->setTextSize(1);
+            display->setTextColor(true);
+            display->setCursor(2, 1);
+            display->print("T:");
+            display->setCursor(68, 1);
+            display->print("H:");
+            
+            // Draw current values
+            display->setCursor(14, 1);
+            display->print(tempStr);
+            display->setCursor(80, 1);
+            display->print(humStr);
+            
+            // Draw separator line
+            display->drawFastHLine(0, 16, 128, true);
+            
+            // Draw plots
+            tempPlot->draw(display);
+            humidityPlot->draw(display);
+            
+            // Draw plot labels
+            display->setTextSize(1);
+            display->setCursor(2, 10);
+            display->print("Temp");
+            display->setCursor(68, 10);
+            display->print("Humid");
+            
+            display->displayBuffer();
+            
+            // Serial output
+            Serial.print("Temperature: ");
+            Serial.print(tempC, 2);
+            Serial.print(" °C, Humidity: ");
+            Serial.print(humidity, 2);
+            Serial.println(" %RH");
+        } else {
+            Serial.println("ERROR: Failed to read sensor!");
+            
+            // Display error on screen
+            display->clearDisplay();
+            display->setTextSize(1);
+            display->setCursor(10, 28);
+            display->println("Sensor Error!");
+            display->displayBuffer();
+        }
+    }
+    
+    // Handle serial commands from host
+    if (Serial.available()) {
+        String command = Serial.readStringUntil('\n');
+        command.trim();
+        command.toUpperCase();
+        
+        handleCommand(command);
+    }
+}
+
+void handleCommand(String command) {
+    if (command == "READ") {
+        // Read and display current values
+        if (tempSensor->readSensor()) {
+            Serial.print("Temperature: ");
+            Serial.print(tempSensor->getTemperature(), 2);
+            Serial.print(" °C (");
+            Serial.print(tempSensor->getTemperatureFahrenheit(), 2);
+            Serial.print(" °F), Humidity: ");
+            Serial.print(tempSensor->getHumidity(), 2);
+            Serial.println(" %RH");
+        } else {
+            Serial.println("ERROR: Sensor read failed");
+        }
+    }
+    else if (command == "SERIAL") {
+        // Display sensor serial number
+        uint32_t serial = tempSensor->getSerialNumber();
+        Serial.print("Sensor Serial: 0x");
+        Serial.println(serial, HEX);
+    }
+    else if (command == "RESET") {
+        // Perform soft reset
+        Serial.print("Resetting sensor... ");
+        if (tempSensor->softReset()) {
+            Serial.println("SUCCESS");
+        } else {
+            Serial.println("FAILED");
+        }
+    }
+    else if (command == "CELSIUS") {
+        // Display temperature in Celsius
+        if (tempSensor->isDataValid()) {
+            Serial.print("Temperature: ");
+            Serial.print(tempSensor->getTemperature(), 2);
+            Serial.println(" °C");
+        } else {
+            Serial.println("No valid data. Reading sensor...");
+            if (tempSensor->readSensor()) {
+                Serial.print("Temperature: ");
+                Serial.print(tempSensor->getTemperature(), 2);
+                Serial.println(" °C");
+            }
+        }
+    }
+    else if (command == "FAHRENHEIT") {
+        // Display temperature in Fahrenheit
+        if (tempSensor->isDataValid()) {
+            Serial.print("Temperature: ");
+            Serial.print(tempSensor->getTemperatureFahrenheit(), 2);
+            Serial.println(" °F");
+        } else {
+            Serial.println("No valid data. Reading sensor...");
+            if (tempSensor->readSensor()) {
+                Serial.print("Temperature: ");
+                Serial.print(tempSensor->getTemperatureFahrenheit(), 2);
+                Serial.println(" °F");
+            }
+        }
+    }
+    else if (command == "HELP") {
+        Serial.println("\nAvailable commands:");
+        Serial.println("  READ - Read current temperature and humidity");
+        Serial.println("  SERIAL - Display sensor serial number");
+        Serial.println("  RESET - Soft reset the sensor");
+        Serial.println("  CELSIUS - Display temperature in Celsius");
+        Serial.println("  FAHRENHEIT - Display temperature in Fahrenheit");
+        Serial.println("  HELP - Display this help message");
+    }
+    else {
+        Serial.print("Unknown command: ");
+        Serial.println(command);
+        Serial.println("Type HELP for available commands");
+    }
+}
