@@ -23,10 +23,6 @@
 #define I2C_SDA 5  // Default SDA for Seeed XIAO ESP32S3
 #define I2C_SCL 6  // Default SCL for Seeed XIAO ESP32S3
 
-// Pin definitions for ESP32S3
-#define I2C_SDA 5  // Default SDA for Seeed XIAO ESP32S3
-#define I2C_SCL 6  // Default SCL for Seeed XIAO ESP32S3
-
 // Create sensor and display instances
 SHT45HumidityTempSensor* tempSensor;
 LedScreen128_64* display;
@@ -116,6 +112,11 @@ void setup() {
     tempPlot = new DataPlot(0, 18, 64, 46, MAX_DATA_POINTS);
     tempPlot->setAutoScale(true);
     tempPlot->setShowAxes(true);
+    tempPlot->setShowGrid(true);
+    tempPlot->setShowAxisLabels(true);
+    tempPlot->setUseTinyAxisLabels(true);
+    tempPlot->setTinyAxisLabelScale(1);
+    tempPlot->setAxisLabelSize(1);
     tempPlot->setPlotStyle(PlotStyle::LINES);
     
     // Humidity plot on right side
@@ -123,6 +124,11 @@ void setup() {
     humidityPlot->setYRange(0, 100);  // Fixed scale for humidity
     humidityPlot->setAutoScale(false);
     humidityPlot->setShowAxes(true);
+    humidityPlot->setShowGrid(true);
+    humidityPlot->setShowAxisLabels(true);
+    humidityPlot->setUseTinyAxisLabels(true);
+    humidityPlot->setTinyAxisLabelScale(1);
+    humidityPlot->setAxisLabelSize(1);
     humidityPlot->setPlotStyle(PlotStyle::LINES);
     
     // Initialize data arrays
@@ -205,12 +211,20 @@ void loop() {
             tempPlot->draw(display);
             humidityPlot->draw(display);
             
-            // Draw plot labels
+            // Draw plot labels and coordinate values (index, value), compact to avoid overlaps
             display->setTextSize(1);
+            int lastIndex = (dataIndex - 1 + MAX_DATA_POINTS) % MAX_DATA_POINTS;
+            float lastTemp = tempData[lastIndex];
+            float lastHum = humData[lastIndex];
+            char leftLabel[20];
+            char rightLabel[20];
+            // Format: "T idx valC" and "H idx val%"
+            snprintf(leftLabel, sizeof(leftLabel), "T %d %.1fC", dataCount - 1, lastTemp);
+            snprintf(rightLabel, sizeof(rightLabel), "H %d %.1f%%", dataCount - 1, lastHum);
             display->setCursor(2, 10);
-            display->print("Temp");
+            display->print(leftLabel);
             display->setCursor(68, 10);
-            display->print("Humid");
+            display->print(rightLabel);
             
             display->displayBuffer();
             

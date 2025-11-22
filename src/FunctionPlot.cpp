@@ -1,11 +1,85 @@
 #include "FunctionPlot.hpp"
 #include <math.h>
+#include <string.h>
+
+// Compute inner content rectangle for plotting to leave room for axis labels
+static void computeContentRectFP(int16_t x, int16_t y, int16_t width, int16_t height,
+                               uint8_t axisLabelSize, bool showAxisLabels,
+                               int16_t &contentX, int16_t &contentY, int16_t &contentW, int16_t &contentH) {
+    int16_t leftPad = 2;
+    int16_t rightPad = 2;
+    int16_t topPad = 2;
+    int16_t bottomPad = 2;
+    if (showAxisLabels) {
+        leftPad = (6 * axisLabelSize) + 4;
+        bottomPad = (8 * axisLabelSize) + 4;
+    }
+    contentX = x + leftPad;
+    contentY = y + topPad;
+    contentW = width - leftPad - rightPad;
+    contentH = height - topPad - bottomPad;
+    if (contentW < 1) contentW = 1;
+    if (contentH < 1) contentH = 1;
+}
+
+// Tiny 3x5 font bitmap same as DataPlot
+static const uint8_t tinyFontFP[][5] = {
+    {0b111,0b101,0b101,0b101,0b111},
+    {0b010,0b110,0b010,0b010,0b111},
+    {0b111,0b001,0b111,0b100,0b111},
+    {0b111,0b001,0b111,0b001,0b111},
+    {0b101,0b101,0b111,0b001,0b001},
+    {0b111,0b100,0b111,0b001,0b111},
+    {0b111,0b100,0b111,0b101,0b111},
+    {0b111,0b001,0b001,0b001,0b001},
+    {0b111,0b101,0b111,0b101,0b111},
+    {0b111,0b101,0b111,0b001,0b111},
+    {0b000,0b000,0b111,0b000,0b000},
+    {0b000,0b000,0b000,0b000,0b010}
+};
+
+static void drawTinyCharFP(LedScreen128_64* screen, int16_t x, int16_t y, char c, uint8_t scale=1) {
+    int index = -1;
+    if (c >= '0' && c <= '9') index = c - '0';
+    else if (c == '-') index = 10;
+    else if (c == '.') index = 11;
+    if (index < 0) return;
+
+    for (int row = 0; row < 5; row++) {
+        uint8_t bits = tinyFontFP[index][row];
+        for (int col = 0; col < 3; col++) {
+            bool on = (bits >> (2 - col)) & 0x1;
+            if (on) {
+                for (int sy = 0; sy < scale; sy++) {
+                    for (int sx = 0; sx < scale; sx++) {
+                        screen->drawPixel(x + col * scale + sx, y + row * scale + sy, true);
+                    }
+                }
+            }
+        }
+    }
+}
+
+static void drawTinyTextFP(LedScreen128_64* screen, int16_t x, int16_t y, const char* text, uint8_t scale=1) {
+    int16_t cursorX = x;
+    while (*text) {
+        char c = *text++;
+        if (c == ' ') cursorX += (3*scale + scale);
+        else {
+            drawTinyCharFP(screen, cursorX, y, c, scale);
+            cursorX += (3*scale + scale);
+        }
+    }
+}
 
 // Constructor
 FunctionPlot::FunctionPlot(int16_t x, int16_t y, int16_t width, int16_t height, MathFunction func)
-    : GraphicsAsset(x, y, width, height, AssetType::FUNCTIONPLOT), function(func), 
-      minX(-10.0f), maxX(10.0f), minY(-10.0f), maxY(10.0f),
-      autoScaleY(false), showAxes(true), showGrid(false), gridSpacing(10), animationFrame(0) {
+        : GraphicsAsset(x, y, width, height, AssetType::FUNCTIONPLOT), function(func), 
+            minX(-10.0f), maxX(10.0f), minY(-10.0f), maxY(10.0f),
+            autoScaleY(false), showAxes(true), showGrid(false), gridSpacing(10), showAxisLabels(false), axisLabelSize(1), animationFrame(0) {
+    // Initialize tiny font options
+    useTinyAxisLabels = false;
+    tinyAxisLabelScale = 1;
 }
 
 // Destructor
@@ -37,6 +111,94 @@ void FunctionPlot::draw(LedScreen128_64* screen) {
     if (showAxes) {
         drawAxes(screen);
     }
+
+    // Draw axis labels if enabled
+    if (showAxisLabels) {
+        screen->setTextSize(axisLabelSize);
+        // X axis labels
+        int16_t contentX, contentY, contentW, contentH;
+        computeContentRectFP(x, y, width, height, axisLabelSize, showAxisLabels, contentX, contentY, contentW, contentH);
+    int16_t prevLabelX = -9999;
+        for (int16_t i = gridSpacing; i < contentW; i += gridSpacing) {
+            int16_t tickX = contentX + i;
+            float normalized = (float)(i) / (float)(contentW - 1);
+            float dataValue = minX + normalized * (maxX - minX);
+            char buf[12];
+            if (fabs(dataValue - (int)dataValue) < 0.001f) {
+                snprintf(buf, sizeof(buf), "%d", (int)dataValue);
+            } else {
+                snprintf(buf, sizeof(buf), "%.1f", dataValue);
+            }
+            // Where to place the label vertically
+            int16_t labelY = contentY + contentH + 1;
+            if (minY <= 0.0f && maxY >= 0.0f) {
+                int16_t y0 = mapY(0.0f);
+                if (y0 + (8 * axisLabelSize) + 1 < (y + height)) {
+                    labelY = y0 + 1;
+                } else {
+                    labelY = y0 - (8 * axisLabelSize) - 1;
+                }
+            }
+            if (useTinyAxisLabels) {
+                int16_t labelW = (int)strlen(buf) * (3 * tinyAxisLabelScale + tinyAxisLabelScale);
+                int16_t labelX = tickX - labelW / 2;
+                if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                    drawTinyTextFP(screen, labelX, labelY, buf, tinyAxisLabelScale);
+                    prevLabelX = labelX;
+                }
+            } else {
+                int16_t labelW = (int)strlen(buf) * 6 * axisLabelSize;
+                int16_t labelX = tickX - labelW / 2;
+                if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                    screen->setCursor(labelX, labelY);
+                    screen->print(buf);
+                    prevLabelX = labelX;
+                }
+            }
+        }
+
+        // Y axis labels
+    int16_t prevLabelY = -9999;
+        for (int16_t i = gridSpacing; i < contentH; i += gridSpacing) {
+            int16_t tickY = contentY + i;
+            float normalized = 1.0f - ((float)(i) / (float)(contentH - 1));
+            float dataValue = minY + normalized * (maxY - minY);
+            char buf[12];
+            if (fabs(dataValue - (int)dataValue) < 0.001f) {
+                snprintf(buf, sizeof(buf), "%d", (int)dataValue);
+            } else {
+                snprintf(buf, sizeof(buf), "%.1f", dataValue);
+            }
+            int16_t labelX;
+            if (minX <= 0.0f && maxX >= 0.0f) {
+                int16_t x0 = mapX(0.0f);
+                labelX = x0 - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                if (labelX < x) {
+                    labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                    if (labelX < x) labelX = x + 1;
+                }
+            } else {
+                labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                if (labelX < x) labelX = x + 1;
+            }
+            if (useTinyAxisLabels) {
+                int16_t labelH = 5 * tinyAxisLabelScale;
+                int16_t labelYAdj = tickY - labelH / 2;
+                if (prevLabelY < -1000 || abs(labelYAdj - prevLabelY) >= (labelH + 2)) {
+                    drawTinyTextFP(screen, labelX, labelYAdj, buf, tinyAxisLabelScale);
+                    prevLabelY = labelYAdj;
+                }
+            } else {
+                int16_t labelH = 8 * axisLabelSize;
+                int16_t labelYAdj = tickY - labelH / 2;
+                if (prevLabelY < -1000 || abs(labelYAdj - prevLabelY) >= (labelH + 2)) {
+                    screen->setCursor(labelX, labelYAdj);
+                    screen->print(buf);
+                    prevLabelY = labelYAdj;
+                }
+            }
+        }
+    }
     
     // Plot the function
     int16_t prevScreenX = -1;
@@ -44,8 +206,11 @@ void FunctionPlot::draw(LedScreen128_64* screen) {
     bool prevValid = false;
     
     // Determine how many pixels to draw (for animation)
-    int maxPixels = width;
-    if (animate && animationFrame < width) {
+    int16_t contentX, contentY, contentW, contentH;
+    computeContentRectFP(x, y, width, height, axisLabelSize, showAxisLabels, contentX, contentY, contentW, contentH);
+    // Determine how many pixels to draw (for animation)
+    int maxPixels = contentW;
+    if (animate && animationFrame < contentW) {
         maxPixels = animationFrame;
         // Auto-advance animation on each draw
         animationFrame++;
@@ -54,7 +219,7 @@ void FunctionPlot::draw(LedScreen128_64* screen) {
     // Sample the function across the width
     for (int16_t i = 0; i < maxPixels; i++) {
         // Calculate the x value in function space
-        float fx = minX + (maxX - minX) * (float)i / (float)(width - 1);
+        float fx = minX + (maxX - minX) * (float)i / (float)(contentW - 1);
         
         // Evaluate the function
         float fy = function(fx);
@@ -159,47 +324,90 @@ uint8_t FunctionPlot::getGridSpacing() const {
     return gridSpacing;
 }
 
+void FunctionPlot::setShowAxisLabels(bool show) {
+    this->showAxisLabels = show;
+}
+
+bool FunctionPlot::getShowAxisLabels() const {
+    return showAxisLabels;
+}
+
+void FunctionPlot::setAxisLabelSize(uint8_t size) {
+    if (size < 1) size = 1;
+    if (size > 4) size = 4;
+    this->axisLabelSize = size;
+}
+
+uint8_t FunctionPlot::getAxisLabelSize() const {
+    return axisLabelSize;
+}
+
+void FunctionPlot::setUseTinyAxisLabels(bool use) {
+    this->useTinyAxisLabels = use;
+}
+
+bool FunctionPlot::getUseTinyAxisLabels() const {
+    return useTinyAxisLabels;
+}
+
+void FunctionPlot::setTinyAxisLabelScale(uint8_t scale) {
+    if (scale < 1) scale = 1;
+    this->tinyAxisLabelScale = scale;
+}
+
+uint8_t FunctionPlot::getTinyAxisLabelScale() const {
+    return tinyAxisLabelScale;
+}
+
 // Helper methods
 int16_t FunctionPlot::mapX(float fx) const {
-    // Map function x to screen x
+    // Map function x to screen x within content rect
+    int16_t contentX, contentY, contentW, contentH;
+    computeContentRectFP(x, y, width, height, axisLabelSize, showAxisLabels, contentX, contentY, contentW, contentH);
     float normalized = (fx - minX) / (maxX - minX);
-    return x + (int16_t)(normalized * (width - 1));
+    return contentX + (int16_t)(normalized * (contentW - 1));
 }
 
 int16_t FunctionPlot::mapY(float fy) const {
     // Map function y to screen y (inverted because screen y increases downward)
+    int16_t contentX, contentY, contentW, contentH;
+    computeContentRectFP(x, y, width, height, axisLabelSize, showAxisLabels, contentX, contentY, contentW, contentH);
     float normalized = (fy - minY) / (maxY - minY);
-    return y + height - 1 - (int16_t)(normalized * (height - 1));
+    return contentY + contentH - 1 - (int16_t)(normalized * (contentH - 1));
 }
 
 void FunctionPlot::drawAxes(LedScreen128_64* screen) {
+    int16_t contentX, contentY, contentW, contentH;
+    computeContentRectFP(x, y, width, height, axisLabelSize, showAxisLabels, contentX, contentY, contentW, contentH);
     // Draw x-axis if y=0 is in range
     if (minY <= 0.0f && maxY >= 0.0f) {
         int16_t y0 = mapY(0.0f);
-        screen->drawFastHLine(x, y0, width, true);
+        screen->drawFastHLine(contentX, y0, contentW, true);
     }
     
     // Draw y-axis if x=0 is in range
     if (minX <= 0.0f && maxX >= 0.0f) {
         int16_t x0 = mapX(0.0f);
-        screen->drawFastVLine(x0, y, height, true);
+        screen->drawFastVLine(x0, contentY, contentH, true);
     }
 }
 
 void FunctionPlot::drawGrid(LedScreen128_64* screen) {
+    int16_t contentX, contentY, contentW, contentH;
+    computeContentRectFP(x, y, width, height, axisLabelSize, showAxisLabels, contentX, contentY, contentW, contentH);
     // Draw vertical grid lines
-    for (int16_t i = gridSpacing; i < width; i += gridSpacing) {
-        int16_t gridX = x + i;
-        for (int16_t j = 0; j < height; j += 2) {
-            screen->drawPixel(gridX, y + j, true);
+    for (int16_t i = gridSpacing; i < contentW; i += gridSpacing) {
+        int16_t gridX = contentX + i;
+        for (int16_t j = 0; j < contentH; j += 2) {
+            screen->drawPixel(gridX, contentY + j, true);
         }
     }
     
     // Draw horizontal grid lines
-    for (int16_t i = gridSpacing; i < height; i += gridSpacing) {
-        int16_t gridY = y + i;
-        for (int16_t j = 0; j < width; j += 2) {
-            screen->drawPixel(x + j, gridY, true);
+    for (int16_t i = gridSpacing; i < contentH; i += gridSpacing) {
+        int16_t gridY = contentY + i;
+        for (int16_t j = 0; j < contentW; j += 2) {
+            screen->drawPixel(contentX + j, gridY, true);
         }
     }
 }

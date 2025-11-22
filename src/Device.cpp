@@ -23,7 +23,7 @@ bool Device::begin() {
 
 // Generic send function - sends data to the device over I2C
 bool Device::send(const uint8_t* data, size_t length) {
-    if (!initialized) {
+    if (!initialized || wire_instance == nullptr) {
         return false;
     }
     
@@ -36,7 +36,7 @@ bool Device::send(const uint8_t* data, size_t length) {
 
 // Generic receive function - receives data from the device over I2C
 bool Device::receive(uint8_t* buffer, size_t length) {
-    if (!initialized) {
+    if (!initialized || wire_instance == nullptr) {
         return false;
     }
     
@@ -59,7 +59,7 @@ bool Device::receive(uint8_t* buffer, size_t length) {
 
 // Write to a specific register
 bool Device::writeRegister(uint8_t reg, uint8_t value) {
-    if (!initialized) {
+    if (!initialized || wire_instance == nullptr) {
         return false;
     }
     
@@ -73,7 +73,7 @@ bool Device::writeRegister(uint8_t reg, uint8_t value) {
 
 // Read from a specific register
 bool Device::readRegister(uint8_t reg, uint8_t* value) {
-    if (!initialized) {
+    if (!initialized || wire_instance == nullptr) {
         return false;
     }
     
@@ -97,7 +97,7 @@ bool Device::readRegister(uint8_t reg, uint8_t* value) {
 
 // Read multiple bytes from a register
 bool Device::readRegisters(uint8_t reg, uint8_t* buffer, size_t length) {
-    if (!initialized) {
+    if (!initialized || wire_instance == nullptr) {
         return false;
     }
     
@@ -129,7 +129,10 @@ bool Device::readRegisters(uint8_t reg, uint8_t* buffer, size_t length) {
 }
 
 // Check if device is connected
-bool Device::isConnected() {
+bool Device::isConnected() const {
+    if (wire_instance == nullptr) {
+        return false;
+    }
     wire_instance->beginTransmission(i2c_address);
     uint8_t error = wire_instance->endTransmission();
     return (error == 0);
@@ -141,7 +144,7 @@ uint8_t Device::getAddress() const {
 }
 
 // Add action to global queue
-void Device::addActionToQueue(uint8_t action_type, uint8_t* data, size_t length) {
+void Device::addActionToQueue(uint8_t action_type, const uint8_t* data, size_t length) {
     DeviceAction action(i2c_address, action_type, data, length);
     action_queue.push(action);
 }

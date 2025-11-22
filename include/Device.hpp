@@ -4,17 +4,21 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <queue>
+#include <vector>
 
 // Action structure for the global queue
 struct DeviceAction {
     uint8_t device_address;
     uint8_t action_type;  // 0 = read, 1 = write, etc.
-    uint8_t* data;
-    size_t data_length;
+    std::vector<uint8_t> data; // Owns the data buffer for safety
     unsigned long timestamp;
     
-    DeviceAction(uint8_t addr, uint8_t type, uint8_t* d, size_t len)
-        : device_address(addr), action_type(type), data(d), data_length(len), timestamp(millis()) {}
+    DeviceAction(uint8_t addr, uint8_t type, const uint8_t* d, size_t len)
+        : device_address(addr), action_type(type), data(), timestamp(millis()) {
+        if (d != nullptr && len > 0) {
+            data.assign(d, d + len);
+        }
+    }
 };
 
 class Device {
@@ -52,13 +56,13 @@ public:
     bool readRegisters(uint8_t reg, uint8_t* buffer, size_t length);
     
     // Check if device is connected
-    bool isConnected();
+    bool isConnected() const;
     
     // Get device address
     uint8_t getAddress() const;
     
-    // Add action to global queue
-    void addActionToQueue(uint8_t action_type, uint8_t* data, size_t length);
+    // Add action to global queue (copies data into the queue)
+    void addActionToQueue(uint8_t action_type, const uint8_t* data, size_t length);
 };
 
 #endif // DEVICE_HPP

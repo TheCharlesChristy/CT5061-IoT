@@ -19,6 +19,10 @@ private:
     bool showAxes;
     bool showGrid;
     uint8_t gridSpacing;
+    bool showAxisLabels;
+    uint8_t axisLabelSize;
+    bool useTinyAxisLabels;
+    uint8_t tinyAxisLabelScale;
     int animationFrame;  // Current animation frame (pixels drawn from left)
     
     // Helper methods
@@ -61,6 +65,14 @@ public:
     
     void setGridSpacing(uint8_t spacing);
     uint8_t getGridSpacing() const;
+    void setShowAxisLabels(bool show);
+    bool getShowAxisLabels() const;
+    void setAxisLabelSize(uint8_t size);
+    uint8_t getAxisLabelSize() const;
+    void setUseTinyAxisLabels(bool use);
+    bool getUseTinyAxisLabels() const;
+    void setTinyAxisLabelScale(uint8_t scale);
+    uint8_t getTinyAxisLabelScale() const;
     
     // Animation control
     void resetAnimation();

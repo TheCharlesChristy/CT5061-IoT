@@ -1,24 +1,19 @@
 #include "LedScreen128_64.hpp"
 #include "GraphicsAsset.hpp"
+#include <algorithm>
 
 // Constructor
 LedScreen128_64::LedScreen128_64(uint8_t address)
-    : Device(address), display(nullptr), display_initialized(false), assetCount(0) {
+    : Device(address), display(nullptr), display_initialized(false) {
     // Create display object with I2C
-    display = new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, wire_instance, OLED_RESET);
+    display.reset(new Adafruit_SSD1306(SCREEN_WIDTH, SCREEN_HEIGHT, wire_instance, OLED_RESET));
     
-    // Initialize assets array
-    for (int i = 0; i < MAX_SCREEN_ASSETS; i++) {
-        assets[i] = nullptr;
-    }
+    // assets vector default-initialized empty
 }
 
 // Destructor
 LedScreen128_64::~LedScreen128_64() {
-    if (display != nullptr) {
-        delete display;
-        display = nullptr;
-    }
+    // unique_ptr will auto-delete
 }
 
 // Initialize the display
@@ -348,7 +343,7 @@ void LedScreen128_64::stopScroll() {
 
 // Get display object for advanced operations
 Adafruit_SSD1306* LedScreen128_64::getDisplayObject() {
-    return display;
+    return display.get();
 }
 
 // Screen dimensions
@@ -362,41 +357,24 @@ int16_t LedScreen128_64::getHeight() const {
 
 // Graphics assets management
 bool LedScreen128_64::addAsset(GraphicsAsset* asset) {
-    if (asset == nullptr || assetCount >= MAX_SCREEN_ASSETS) {
-        return false;
-    }
-    
-    assets[assetCount] = asset;
-    assetCount++;
+    if (asset == nullptr) return false;
+    if (assets.size() >= MAX_SCREEN_ASSETS) return false;
+    assets.push_back(asset);
     return true;
 }
 
 bool LedScreen128_64::removeAsset(GraphicsAsset* asset) {
-    if (asset == nullptr) {
-        return false;
+    if (asset == nullptr) return false;
+    auto it = std::find(assets.begin(), assets.end(), asset);
+    if (it != assets.end()) {
+        assets.erase(it);
+        return true;
     }
-    
-    // Find and remove the asset
-    for (int i = 0; i < assetCount; i++) {
-        if (assets[i] == asset) {
-            // Shift remaining assets down
-            for (int j = i; j < assetCount - 1; j++) {
-                assets[j] = assets[j + 1];
-            }
-            assets[assetCount - 1] = nullptr;
-            assetCount--;
-            return true;
-        }
-    }
-    
     return false;
 }
 
 void LedScreen128_64::clearAssets() {
-    for (int i = 0; i < MAX_SCREEN_ASSETS; i++) {
-        assets[i] = nullptr;
-    }
-    assetCount = 0;
+    assets.clear();
 }
 
 void LedScreen128_64::drawAssets() {
@@ -404,29 +382,22 @@ void LedScreen128_64::drawAssets() {
         return;
     }
     
-    // Sort assets by z-index (simple bubble sort for small arrays)
-    // Higher z-index = drawn later (on top)
-    for (int i = 0; i < assetCount - 1; i++) {
-        for (int j = 0; j < assetCount - i - 1; j++) {
-            if (assets[j] != nullptr && assets[j + 1] != nullptr) {
-                if (assets[j]->getZIndex() > assets[j + 1]->getZIndex()) {
-                    // Swap
-                    GraphicsAsset* temp = assets[j];
-                    assets[j] = assets[j + 1];
-                    assets[j + 1] = temp;
-                }
-            }
-        }
-    }
-    
+    // Sort assets by z-index (lower values drawn first)
+    std::sort(assets.begin(), assets.end(), [](GraphicsAsset* a, GraphicsAsset* b){
+        if (a == nullptr && b == nullptr) return false;
+        if (a == nullptr) return true;
+        if (b == nullptr) return false;
+        return a->getZIndex() < b->getZIndex();
+    });
+
     // Draw all assets in z-index order
-    for (int i = 0; i < assetCount; i++) {
-        if (assets[i] != nullptr && assets[i]->isVisible()) {
-            assets[i]->draw(this);
+    for (auto asset : assets) {
+        if (asset != nullptr && asset->isVisible()) {
+            asset->draw(this);
         }
     }
 }
 
 int LedScreen128_64::getAssetCount() const {
-    return assetCount;
+    return (int)assets.size();
 }

@@ -4,6 +4,8 @@
 #include <Arduino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <memory>
+#include <vector>
 #include "Device.hpp"
 
 // Forward declaration
@@ -17,12 +19,11 @@ class GraphicsAsset;
 
 class LedScreen128_64 : public Device {
 private:
-    Adafruit_SSD1306* display;
+    std::unique_ptr<Adafruit_SSD1306> display;
     bool display_initialized;
     
     // Graphics assets management
-    GraphicsAsset* assets[MAX_SCREEN_ASSETS];
-    int assetCount;
+    std::vector<GraphicsAsset*> assets;
     
 public:
     // Constructor - default address is 0x3C for most SSD1306 displays

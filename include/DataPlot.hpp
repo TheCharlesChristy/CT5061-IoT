@@ -25,6 +25,10 @@ private:
     bool showAxes;          // Show axes
     bool showGrid;          // Show grid
     uint8_t gridSpacing;    // Grid spacing in pixels
+    bool showAxisLabels;    // Show numeric labels on axes
+    uint8_t axisLabelSize;  // Font size for axis labels
+    bool useTinyAxisLabels;  // Use a custom tiny 3x5 font for axis labels
+    uint8_t tinyAxisLabelScale; // Scale for tiny font (1 = 3x5)
     int animationFrame;     // Current animation frame (number of points drawn)
     
     // Helper methods
@@ -76,6 +80,14 @@ public:
     
     void setGridSpacing(uint8_t spacing);
     uint8_t getGridSpacing() const;
+    void setShowAxisLabels(bool show);
+    bool getShowAxisLabels() const;
+    void setAxisLabelSize(uint8_t size);
+    uint8_t getAxisLabelSize() const;
+    void setUseTinyAxisLabels(bool use);
+    bool getUseTinyAxisLabels() const;
+    void setTinyAxisLabelScale(uint8_t scale);
+    uint8_t getTinyAxisLabelScale() const;
     
     // Animation control
     void resetAnimation();

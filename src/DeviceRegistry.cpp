@@ -125,14 +125,14 @@ bool DeviceRegistry::performNextAction() {
     // Perform the action based on action_type
     switch (action.action_type) {
         case 0: // Read operation
-            if (action.data != nullptr && action.data_length > 0) {
-                success = device->receive(action.data, action.data_length);
+            if (!action.data.empty()) {
+                success = device->receive(action.data.data(), action.data.size());
             }
             break;
             
         case 1: // Write operation
-            if (action.data != nullptr && action.data_length > 0) {
-                success = device->send(action.data, action.data_length);
+            if (!action.data.empty()) {
+                success = device->send(action.data.data(), action.data.size());
             }
             break;
             
