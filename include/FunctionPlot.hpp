@@ -23,6 +23,9 @@ private:
     uint8_t axisLabelSize;
     bool useTinyAxisLabels;
     uint8_t tinyAxisLabelScale;
+    bool autoTinyAxisLabels;
+    uint8_t tinyLabelAutoThreshold;
+    uint8_t maxTicks;
     int animationFrame;  // Current animation frame (pixels drawn from left)
     
     // Helper methods
@@ -73,6 +76,12 @@ public:
     bool getUseTinyAxisLabels() const;
     void setTinyAxisLabelScale(uint8_t scale);
     uint8_t getTinyAxisLabelScale() const;
+    void setAutoTinyAxisLabels(bool autoEnable);
+    bool getAutoTinyAxisLabels() const;
+    void setTinyLabelAutoThreshold(uint8_t threshold);
+    uint8_t getTinyLabelAutoThreshold() const;
+    void setMaxTicks(uint8_t max);
+    uint8_t getMaxTicks() const;
     
     // Animation control
     void resetAnimation();

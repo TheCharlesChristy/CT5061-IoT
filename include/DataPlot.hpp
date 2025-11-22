@@ -29,6 +29,9 @@ private:
     uint8_t axisLabelSize;  // Font size for axis labels
     bool useTinyAxisLabels;  // Use a custom tiny 3x5 font for axis labels
     uint8_t tinyAxisLabelScale; // Scale for tiny font (1 = 3x5)
+    bool autoTinyAxisLabels; // Automatically enable tiny labels based on content width
+    uint8_t tinyLabelAutoThreshold; // threshold width (in pixels) to auto-enable tiny font
+    uint8_t maxTicks;       // Maximum number of ticks to draw (0 -> use gridSpacing)
     int animationFrame;     // Current animation frame (number of points drawn)
     
     // Helper methods
@@ -88,6 +91,12 @@ public:
     bool getUseTinyAxisLabels() const;
     void setTinyAxisLabelScale(uint8_t scale);
     uint8_t getTinyAxisLabelScale() const;
+    void setAutoTinyAxisLabels(bool autoEnable);
+    bool getAutoTinyAxisLabels() const;
+    void setTinyLabelAutoThreshold(uint8_t threshold);
+    uint8_t getTinyLabelAutoThreshold() const;
+    void setMaxTicks(uint8_t max);
+    uint8_t getMaxTicks() const;
     
     // Animation control
     void resetAnimation();

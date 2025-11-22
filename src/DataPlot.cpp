@@ -48,7 +48,15 @@ static const uint8_t tinyFont[][5] = {
     // - (index 10)
     {0b000,0b000,0b111,0b000,0b000},
     // . (index 11)
-    {0b000,0b000,0b000,0b000,0b010}
+    {0b000,0b000,0b000,0b000,0b010},
+    // C (index 12)
+    {0b111,0b100,0b100,0b100,0b111},
+    // T (index 13)
+    {0b111,0b010,0b010,0b010,0b010},
+    // H (index 14)
+    {0b101,0b101,0b111,0b101,0b101},
+    // % (index 15)
+    {0b101,0b001,0b100,0b010,0b101}
 };
 
 static void drawTinyChar(LedScreen128_64* screen, int16_t x, int16_t y, char c, uint8_t scale=1) {
@@ -56,6 +64,10 @@ static void drawTinyChar(LedScreen128_64* screen, int16_t x, int16_t y, char c, 
     if (c >= '0' && c <= '9') index = c - '0';
     else if (c == '-') index = 10;
     else if (c == '.') index = 11;
+    else if (c == 'C' || c == 'c') index = 12;
+    else if (c == 'T' || c == 't') index = 13;
+    else if (c == 'H' || c == 'h') index = 14;
+    else if (c == '%') index = 15;
     if (index < 0) return; // unsupported char
 
     for (int row = 0; row < 5; row++) {
@@ -91,7 +103,7 @@ DataPlot::DataPlot(int16_t x, int16_t y, int16_t width, int16_t height, int capa
         : GraphicsAsset(x, y, width, height, AssetType::DATAPLOT), dataX(nullptr), dataY(nullptr),
       dataSize(0), dataCapacity(capacity), minX(0.0f), maxX(100.0f),
       minY(0.0f), maxY(100.0f), autoScale(true), style(PlotStyle::LINES),
-        showAxes(true), showGrid(false), gridSpacing(10), showAxisLabels(false), axisLabelSize(1), useTinyAxisLabels(false), tinyAxisLabelScale(1), animationFrame(0) {
+    showAxes(true), showGrid(false), gridSpacing(10), showAxisLabels(false), axisLabelSize(1), useTinyAxisLabels(false), tinyAxisLabelScale(1), autoTinyAxisLabels(true), tinyLabelAutoThreshold(36), maxTicks(0), animationFrame(0) {
     
     // Allocate data arrays
     if (capacity > 0) {
@@ -150,54 +162,141 @@ void DataPlot::draw(LedScreen128_64* screen) {
     // Draw X axis tick labels
     // We use the gridSpacing to determine tick spacing in pixels
         int16_t prevLabelX = -9999;
-        for (int16_t i = gridSpacing; i < contentW; i += gridSpacing) {
-            int16_t tickX = contentX + i;
-            // Inverse map to get data X value at this screen X
-            float normalized = (float)(i) / (float)(contentW - 1);
-            float dataValue = minX + normalized * (maxX - minX);
-            // Position label slightly below x-axis if possible; otherwise above
-            int16_t labelY = contentY + contentH + 1; // default below content rect
-            // If the x-axis is within range, place label near axis
-            if (minY <= 0.0f && maxY >= 0.0f) {
-                int16_t y0 = mapY(0.0f);
-                if (y0 + (8 * axisLabelSize) + 1 < (y + height)) {
-                    // Place below axis if there's space
-                    labelY = y0 + 1;
+        bool effectiveTiny = useTinyAxisLabels || (autoTinyAxisLabels && contentW <= tinyLabelAutoThreshold);
+        bool effectiveTinyY = useTinyAxisLabels || (autoTinyAxisLabels && contentH <= tinyLabelAutoThreshold);
+        if (maxTicks > 1) {
+            float step = (contentW - 1) / (float)(maxTicks - 1);
+            for (int k = 0; k < maxTicks; k++) {
+                int16_t i = (int16_t)round(k * step);
+                int16_t tickX = contentX + i;
+                // Inverse map to get data X value at this screen X
+                float normalized = (contentW > 1) ? ((float)i) / (float)(contentW - 1) : 0.0f;
+                float dataValue = minX + normalized * (maxX - minX);
+                // Position label slightly below x-axis if possible; otherwise above
+                int16_t labelY = contentY + contentH + 1; // default below content rect
+                // If the x-axis is within range, place label near axis
+                if (minY <= 0.0f && maxY >= 0.0f) {
+                    int16_t y0 = mapY(0.0f);
+                    if (y0 + (8 * axisLabelSize) + 1 < (y + height)) {
+                        // Place below axis if there's space
+                        labelY = y0 + 1;
+                    } else {
+                        labelY = y0 - (8 * axisLabelSize) - 1;
+                    }
+                }
+                char buf[12];
+                // Print with 1 decimal when necessary
+                if (fabs(dataValue - (int)dataValue) < 0.001f) {
+                    snprintf(buf, sizeof(buf), "%d", (int)dataValue);
                 } else {
-                    labelY = y0 - (8 * axisLabelSize) - 1;
+                    snprintf(buf, sizeof(buf), "%.1f", dataValue);
+                }
+                    if (effectiveTiny) {
+                    int16_t labelW = (int)strlen(buf) * (3 * tinyAxisLabelScale + tinyAxisLabelScale);
+                    int16_t labelX = tickX - labelW / 2;
+                    if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                        drawTinyText(screen, labelX, labelY, buf, tinyAxisLabelScale);
+                        prevLabelX = labelX;
+                    }
+                } else {
+                    int16_t labelW = (int)strlen(buf) * 6 * axisLabelSize;
+                    int16_t labelX = tickX - labelW / 2;
+                    if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                        screen->setCursor(labelX, labelY);
+                        screen->print(buf);
+                        prevLabelX = labelX;
+                    }
                 }
             }
-            char buf[12];
-            // Print with 1 decimal when necessary
-            if (fabs(dataValue - (int)dataValue) < 0.001f) {
-                snprintf(buf, sizeof(buf), "%d", (int)dataValue);
-            } else {
-                snprintf(buf, sizeof(buf), "%.1f", dataValue);
-            }
-            if (useTinyAxisLabels) {
-                int16_t labelW = (int)strlen(buf) * (3 * tinyAxisLabelScale + tinyAxisLabelScale);
-                int16_t labelX = tickX - labelW / 2;
-                if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
-                    drawTinyText(screen, labelX, labelY, buf, tinyAxisLabelScale);
-                    prevLabelX = labelX;
+        } else {
+            if (gridSpacing <= 0 || gridSpacing >= contentW) {
+                // At least draw the min and max tick
+                for (int k = 0; k < 2; k++) {
+                    int16_t i = (k == 0) ? 0 : (contentW - 1);
+                    int16_t tickX = contentX + i;
+                    float normalized = (contentW > 1) ? ((float)i) / (float)(contentW - 1) : 0.0f;
+                    float dataValue = minX + normalized * (maxX - minX);
+                    int16_t labelY = contentY + contentH + 1;
+                    if (minY <= 0.0f && maxY >= 0.0f) {
+                        int16_t y0 = mapY(0.0f);
+                        if (y0 + (8 * axisLabelSize) + 1 < (y + height)) {
+                            labelY = y0 + 1;
+                        } else {
+                            labelY = y0 - (8 * axisLabelSize) - 1;
+                        }
+                    }
+                    char buf[12];
+                    if (fabs(dataValue - (int)dataValue) < 0.001f) {
+                        snprintf(buf, sizeof(buf), "%d", (int)dataValue);
+                    } else {
+                        snprintf(buf, sizeof(buf), "%.1f", dataValue);
+                    }
+                        if (effectiveTiny) {
+                        int16_t labelW = (int)strlen(buf) * (3 * tinyAxisLabelScale + tinyAxisLabelScale);
+                        int16_t labelX = tickX - labelW / 2;
+                        if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                            drawTinyText(screen, labelX, labelY, buf, tinyAxisLabelScale);
+                            prevLabelX = labelX;
+                        }
+                    } else {
+                        int16_t labelW = (int)strlen(buf) * 6 * axisLabelSize;
+                        int16_t labelX = tickX - labelW / 2;
+                        if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                            screen->setCursor(labelX, labelY);
+                            screen->print(buf);
+                            prevLabelX = labelX;
+                        }
+                    }
                 }
             } else {
-                int16_t labelW = (int)strlen(buf) * 6 * axisLabelSize;
-                int16_t labelX = tickX - labelW / 2;
-                if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
-                    screen->setCursor(labelX, labelY);
-                    screen->print(buf);
-                    prevLabelX = labelX;
+                for (int16_t i = gridSpacing; i < contentW; i += gridSpacing) {
+                    int16_t tickX = contentX + i;
+                    float normalized = (contentW > 1) ? ((float)i) / (float)(contentW - 1) : 0.0f;
+                    float dataValue = minX + normalized * (maxX - minX);
+                    int16_t labelY = contentY + contentH + 1; // default below content rect
+                    if (minY <= 0.0f && maxY >= 0.0f) {
+                        int16_t y0 = mapY(0.0f);
+                        if (y0 + (8 * axisLabelSize) + 1 < (y + height)) {
+                            labelY = y0 + 1;
+                        } else {
+                            labelY = y0 - (8 * axisLabelSize) - 1;
+                        }
+                    }
+                    char buf[12];
+                    if (fabs(dataValue - (int)dataValue) < 0.001f) {
+                        snprintf(buf, sizeof(buf), "%d", (int)dataValue);
+                    } else {
+                        snprintf(buf, sizeof(buf), "%.1f", dataValue);
+                    }
+                        if (effectiveTiny) {
+                        int16_t labelW = (int)strlen(buf) * (3 * tinyAxisLabelScale + tinyAxisLabelScale);
+                        int16_t labelX = tickX - labelW / 2;
+                        if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                            drawTinyText(screen, labelX, labelY, buf, tinyAxisLabelScale);
+                            prevLabelX = labelX;
+                        }
+                    } else {
+                        int16_t labelW = (int)strlen(buf) * 6 * axisLabelSize;
+                        int16_t labelX = tickX - labelW / 2;
+                        if (prevLabelX < -1000 || abs(labelX - prevLabelX) >= (labelW + 2)) {
+                            screen->setCursor(labelX, labelY);
+                            screen->print(buf);
+                            prevLabelX = labelX;
+                        }
+                    }
                 }
             }
         }
 
         // Draw Y axis tick labels
         int16_t prevLabelY = -9999;
-        for (int16_t i = gridSpacing; i < contentH; i += gridSpacing) {
-            int16_t tickY = contentY + i;
-            float normalized = 1.0f - ((float)(i) / (float)(contentH - 1));
-            float dataValue = minY + normalized * (maxY - minY);
+        if (maxTicks > 1) {
+            float stepY = (contentH - 1) / (float)(maxTicks - 1);
+            for (int k = 0; k < maxTicks; k++) {
+                int16_t i = (int16_t)round(k * stepY);
+                int16_t tickY = contentY + i;
+                float normalized = (contentH > 1) ? (1.0f - ((float)(i) / (float)(contentH - 1))) : 0.0f;
+                float dataValue = minY + normalized * (maxY - minY);
             char buf[12];
             if (fabs(dataValue - (int)dataValue) < 0.001f) {
                 snprintf(buf, sizeof(buf), "%d", (int)dataValue);
@@ -205,22 +304,22 @@ void DataPlot::draw(LedScreen128_64* screen) {
                 snprintf(buf, sizeof(buf), "%.1f", dataValue);
             }
             // Position label left of y-axis or at left edge
-            int16_t labelX;
-            if (minX <= 0.0f && maxX >= 0.0f) {
-                int16_t x0 = mapX(0.0f);
-                labelX = x0 - (int)strlen(buf) * 6 * axisLabelSize - 2;
-                if (labelX < x) {
-                    // If the calculated position is inside the content rect, push it into the left margin
+                int16_t labelX;
+                if (minX <= 0.0f && maxX >= 0.0f) {
+                    int16_t x0 = mapX(0.0f);
+                    labelX = x0 - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                    if (labelX < x) {
+                        // If the calculated position is inside the content rect, push it into the left margin
+                        labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                        if (labelX < x) labelX = x + 1;
+                    }
+                } else {
                     labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
                     if (labelX < x) labelX = x + 1;
                 }
-            } else {
-                labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
-                if (labelX < x) labelX = x + 1;
-            }
-            if (useTinyAxisLabels) {
-                int16_t labelH = 5 * tinyAxisLabelScale;
-                int16_t labelYAdj = tickY - labelH / 2;
+            if (effectiveTinyY) {
+                    int16_t labelH = 5 * tinyAxisLabelScale;
+                    int16_t labelYAdj = tickY - labelH / 2;
                 if (prevLabelY < -1000 || abs(labelYAdj - prevLabelY) >= (labelH + 2)) {
                     drawTinyText(screen, labelX, labelYAdj, buf, tinyAxisLabelScale);
                     prevLabelY = labelYAdj;
@@ -232,6 +331,47 @@ void DataPlot::draw(LedScreen128_64* screen) {
                     screen->setCursor(labelX, labelYAdj);
                     screen->print(buf);
                     prevLabelY = labelYAdj;
+                }
+            }
+            }
+        } else {
+            for (int16_t i = gridSpacing; i < contentH; i += gridSpacing) {
+                int16_t tickY = contentY + i;
+                float normalized = 1.0f - ((float)(i) / (float)(contentH - 1));
+                float dataValue = minY + normalized * (maxY - minY);
+                char buf[12];
+                if (fabs(dataValue - (int)dataValue) < 0.001f) {
+                    snprintf(buf, sizeof(buf), "%d", (int)dataValue);
+                } else {
+                    snprintf(buf, sizeof(buf), "%.1f", dataValue);
+                }
+                int16_t labelX;
+                if (minX <= 0.0f && maxX >= 0.0f) {
+                    int16_t x0 = mapX(0.0f);
+                    labelX = x0 - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                    if (labelX < x) {
+                        labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                        if (labelX < x) labelX = x + 1;
+                    }
+                } else {
+                    labelX = contentX - (int)strlen(buf) * 6 * axisLabelSize - 2;
+                    if (labelX < x) labelX = x + 1;
+                }
+                if (effectiveTinyY) {
+                    int16_t labelH = 5 * tinyAxisLabelScale;
+                    int16_t labelYAdj = tickY - labelH / 2;
+                    if (prevLabelY < -1000 || abs(labelYAdj - prevLabelY) >= (labelH + 2)) {
+                        drawTinyText(screen, labelX, labelYAdj, buf, tinyAxisLabelScale);
+                        prevLabelY = labelYAdj;
+                    }
+                } else {
+                    int16_t labelH = 8 * axisLabelSize;
+                    int16_t labelYAdj = tickY - labelH / 2;
+                    if (prevLabelY < -1000 || abs(labelYAdj - prevLabelY) >= (labelH + 2)) {
+                        screen->setCursor(labelX, labelYAdj);
+                        screen->print(buf);
+                        prevLabelY = labelYAdj;
+                    }
                 }
             }
         }
@@ -421,6 +561,30 @@ void DataPlot::setAxisLabelSize(uint8_t size) {
 
 uint8_t DataPlot::getAxisLabelSize() const {
     return axisLabelSize;
+}
+
+void DataPlot::setAutoTinyAxisLabels(bool autoEnable) {
+    this->autoTinyAxisLabels = autoEnable;
+}
+
+bool DataPlot::getAutoTinyAxisLabels() const {
+    return autoTinyAxisLabels;
+}
+
+void DataPlot::setTinyLabelAutoThreshold(uint8_t threshold) {
+    this->tinyLabelAutoThreshold = threshold;
+}
+
+uint8_t DataPlot::getTinyLabelAutoThreshold() const {
+    return tinyLabelAutoThreshold;
+}
+
+void DataPlot::setMaxTicks(uint8_t max) {
+    this->maxTicks = max;
+}
+
+uint8_t DataPlot::getMaxTicks() const {
+    return maxTicks;
 }
 
 void DataPlot::setUseTinyAxisLabels(bool use) {
