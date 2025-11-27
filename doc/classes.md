@@ -800,6 +800,66 @@ void setup() {
 
 ---
 
+## SoilMoistureSensor Class
+
+### Purpose
+
+`SoilMoistureSensor` exposes the analog output of a capacitive soil probe (pins: VCC, GND, AOUT) through the `Device` abstraction so it can participate in the registry/action queue system alongside I2C peripherals. Rather than using I2C, the class samples a user-specified analog pin, averages multiple readings, and maps the result to a 0-100% moisture value using configurable calibration points.
+
+### Location
+
+- Header: `include/SoilMoistureSensor.hpp`
+- Implementation: `src/SoilMoistureSensor.cpp`
+
+### Key Features
+
+- Inherits from `Device`, but overrides `receive()` to perform analog reads instead of I2C transfers
+- Configurable analog pin (defaults to GPIO 1)
+- Simple calibration via `setCalibration(dryReading, wetReading)`
+- Averaging control with `setSamplesPerReading()` to smooth noisy ADC data
+- Convenience helpers to fetch raw values, percentage readings, and timestamps
+- Compatible with `DeviceRegistry::performNextAction()` because the virtual `receive()` now supports non-I2C transports
+
+### Constructor
+
+```cpp
+SoilMoistureSensor sensor(0x60, A2); // virtual address, analog pin
+```
+
+Use a unique virtual address when mixing with other devices in the queue. The analog pin should be any ADC-capable GPIO connected to the probe's AOUT pin.
+
+### Initialization
+
+```cpp
+soilSensor.begin();
+soilSensor.setCalibration(3500, 1500); // dry, wet reference readings
+soilSensor.setSamplesPerReading(8);
+```
+
+Calling `begin()` configures the analog pin as an input and primes the cached reading. Calibration values can be obtained by measuring the sensor in air (0% moisture) and in water (100% moisture).
+
+### Reading Data
+
+```cpp
+uint16_t raw = soilSensor.readRaw();
+float percent = soilSensor.readMoisturePercent();
+```
+
+The `receive()` override allows queued read actions to capture the same data:
+
+```cpp
+uint8_t payload[6];
+soilSensor.receive(payload, sizeof(payload));
+// bytes 0-1 = raw ADC (little-endian)
+// bytes 2-5 = float percentage (optional if buffer >= 6 bytes)
+```
+
+### Demo
+
+See `src/demos/SoilMoistureGraphDemo.cpp` for a complete example that samples the sensor, plots the readings on the OLED, and streams updates over Serial.
+
+---
+
 # Part 2: Graphics System
 
 ## Overview

@@ -40,11 +40,12 @@ public:
     // Initialize the device
     virtual bool begin();
     
-    // Generic send function - sends data to the device over I2C
-    bool send(const uint8_t* data, size_t length);
+    // Generic send function - default implementation uses I2C
+    virtual bool send(const uint8_t* data, size_t length);
     
-    // Generic receive function - receives data from the device over I2C
-    bool receive(uint8_t* buffer, size_t length);
+    // Generic receive function - default implementation uses I2C
+    // Derived classes can override to support SPI, analog, GPIO, etc.
+    virtual bool receive(uint8_t* buffer, size_t length);
     
     // Write to a specific register
     bool writeRegister(uint8_t reg, uint8_t value);
